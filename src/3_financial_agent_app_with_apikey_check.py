@@ -62,23 +62,35 @@ finance_agent = Agent(
     markdown=True,
 )
 
-# Inject custom CSS to create a scrollable area
+# Streamlit UI setup
+st.title("Financial Analysis Assistant")
+
+# Custom CSS for scrollable content
 st.markdown("""
     <style>
     .scrollable {
         height: 400px;
-        overflow-y: scroll;
+        overflow-y: auto;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# Streamlit UI setup
-st.title("Financial Analysis Assistant")
+# Check for API key and prompt if not present
+if not api_key:
+    api_key = st.text_input("Enter your API key to start using the application:", type="password")
 
-# Sidebar content for user guidance
-with st.sidebar:
-    st.header("📘 How to Use")
-    st.markdown(
+    if st.button("Submit API Key"):
+        if api_key:
+            os.environ["GOOGLE_API_KEY"] = api_key
+            st.experimental_rerun()
+        else:
+            st.error("API key is required to proceed.")
+
+else:
+    # Sidebar content for user guidance
+    with st.sidebar:
+        st.header("📘 How to Use")
+        st.markdown(
         """
         This AI-powered **Financial Analysis Assistant** helps you analyze stocks using live market data.  
         Simply:
@@ -113,31 +125,19 @@ with st.sidebar:
     st.markdown("---")
     #st.caption("Made with ❤️ using Streamlit, Agno Agents, and Gemini.")
 
-# Input field for the API key if not set
-if not api_key:
-    api_key = st.sidebar.text_input("Enter your API key:")
-    if api_key:
-        os.environ["GOOGLE_API_KEY"] = api_key
-    else:
-        st.sidebar.warning("API key is required to analyze stocks.")
+    # Input field for the stock ticker
+    ticker = st.text_input("Enter the stock ticker symbol (e.g., AAPL):")
 
-# Input field for the stock ticker
-ticker = st.text_input("Enter the stock ticker symbol (e.g., AAPL):")
-
-# Button for triggering analysis
-if st.button("Analyze"):
-    if ticker and api_key:
-        query = f"What's the latest news and financial performance of {ticker}?"
-        with st.spinner("Analyzing..."):
-            response = finance_agent.run(query, stream=False)
-        if response and response.content:
-            st.subheader("Analysis Report:")
-            # Use custom scrollable div for the response content
-            st.markdown(f'<div class="scrollable">{response.content}</div>', unsafe_allow_html=True)
+    if st.button("Analyze"):
+        if ticker:
+            query = f"What's the latest news and financial performance of {ticker}?"
+            with st.spinner("Analyzing..."):
+                response = finance_agent.run(query, stream=False)
+            if response and response.content:
+                st.subheader("Analysis Report:")
+                # Using custom scrollable div for the response content
+                st.markdown(f'<div class="scrollable">{response.content}</div>', unsafe_allow_html=True)
+            else:
+                st.error("No response received from the agent.")
         else:
-            st.error("No response received from the agent.")
-    else:
-        if not ticker:
             st.error("Please enter a stock ticker symbol.")
-        if not api_key:
-            st.error("API key is required to proceed.")
