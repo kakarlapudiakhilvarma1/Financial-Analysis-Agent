@@ -85,9 +85,11 @@ If the `.env` is missing or empty, the app will securely prompt you for the key 
 ---
 
 ## ▶️ Run the App
-
 ```bash
-streamlit run app.py
+cd src
+```
+```bash
+streamlit run 3_financial_agent_app_with_apikey_check.py
 ```
 
 Then open your browser and go to: [http://localhost:8501](http://localhost:8501)
