@@ -31,7 +31,7 @@ if not api_key and not st.session_state.api_key_set:
             api_key = user_api_key
             st.session_state.api_key_set = True
             st.success("API Key set successfully!")
-            st.rerun()
+            st.rerun()  # Using st.rerun() instead of st.experimental_rerun()
         elif submit_button and not user_api_key:
             st.error("Please enter a valid API key.")
             
@@ -77,7 +77,7 @@ with st.sidebar:
     # Add option to reset API key if needed
     if st.button("Reset API Key"):
         st.session_state.api_key_set = False
-        st.experimental_rerun()
+        st.rerun()  # Using st.rerun() instead of st.experimental_rerun()
 
     st.markdown("---")
 
