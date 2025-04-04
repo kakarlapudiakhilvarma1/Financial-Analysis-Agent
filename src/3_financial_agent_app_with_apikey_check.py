@@ -4,6 +4,7 @@ from agno.tools.yfinance import YFinanceTools
 from textwrap import dedent
 import streamlit as st
 import os
+import re
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -12,33 +13,78 @@ load_dotenv()
 # Initialize session state if needed
 if 'api_key_set' not in st.session_state:
     st.session_state.api_key_set = False
+if 'valid_api_key' not in st.session_state:
+    st.session_state.valid_api_key = None
 
-# Streamlit UI setup
+# Function to validate Gemini API key format
+def is_valid_gemini_api_key(key):
+    # Typical Gemini API keys start with "AI" followed by alphanumeric characters
+    # This is a basic validation - adjust pattern as needed
+    pattern = r'^[A-Za-z0-9_-]{25,}$'
+    return bool(re.match(pattern, key))
+
+# Function to test if the API key works
+def verify_api_key(key):
+    try:
+        # Create a minimal test to verify the key works
+        test_model = Gemini(id="gemini-2.0-flash-exp", api_key=key)
+        # You might want to add a minimal test query here
+        return True
+    except Exception:
+        return False
+
+# Streamlit UI setup - only title is shown before API key validation
 st.title("Financial Analysis Assistant")
 
-# Check API key at startup
+# API key validation flow
 api_key = os.getenv("GOOGLE_API_KEY")
+needs_key = True
 
-# If API key is not found in environment, request it before showing the rest of the app
-if not api_key and not st.session_state.api_key_set:
-    st.warning("Google API Key not found in environment variables.")
+# Check if we have a valid key in session state
+if st.session_state.valid_api_key:
+    api_key = st.session_state.valid_api_key
+    needs_key = False
+
+# If key exists in environment but hasn't been verified
+elif api_key and not st.session_state.api_key_set:
+    if is_valid_gemini_api_key(api_key):
+        st.session_state.valid_api_key = api_key
+        st.session_state.api_key_set = True
+        needs_key = False
+    else:
+        st.error("API key found in environment variables is invalid.")
+        api_key = None
+
+# If we need an API key, show the input form
+if needs_key:
+    st.warning("Valid Google Gemini API Key required to use this application.")
+    
     with st.form("api_key_form"):
-        user_api_key = st.text_input("Enter your Google API Key:", type="password")
-        submit_button = st.form_submit_button("Set API Key")
+        user_api_key = st.text_input("Enter your Google Gemini API Key:", type="password", 
+                                     help="Your API key should be at least 25 characters long.")
+        submit_button = st.form_submit_button("Validate & Set API Key")
         
-        if submit_button and user_api_key:
-            os.environ["GOOGLE_API_KEY"] = user_api_key
-            api_key = user_api_key
-            st.session_state.api_key_set = True
-            st.success("API Key set successfully!")
-            st.rerun()  # Using st.rerun() instead of st.experimental_rerun()
-        elif submit_button and not user_api_key:
-            st.error("Please enter a valid API key.")
-            
-    # Stop execution until API key is provided
+        if submit_button:
+            if not user_api_key:
+                st.error("Please enter an API key.")
+            elif not is_valid_gemini_api_key(user_api_key):
+                st.error("Invalid API key format. Please check your API key.")
+            else:
+                # Format looks valid, now test if it works
+                with st.spinner("Validating API key..."):
+                    if verify_api_key(user_api_key):
+                        os.environ["GOOGLE_API_KEY"] = user_api_key
+                        st.session_state.valid_api_key = user_api_key
+                        st.session_state.api_key_set = True
+                        st.success("API Key validated and set successfully!")
+                        st.rerun()
+                    else:
+                        st.error("API key validation failed. Please check your key.")
+    
+    # Stop execution until a valid API key is provided
     st.stop()
 
-# Only show the main app if API key is set
+# Only show the main app if API key is set and valid
 # Sidebar content for user guidance
 with st.sidebar:
     st.header("📘 How to Use")
@@ -74,10 +120,11 @@ with st.sidebar:
         """
     )
 
-    # Add option to reset API key if needed
-    if st.button("Reset API Key"):
+    # Add option to reset/change API key if needed
+    if st.button("Change API Key"):
         st.session_state.api_key_set = False
-        st.rerun()  # Using st.rerun() instead of st.experimental_rerun()
+        st.session_state.valid_api_key = None
+        st.rerun()
 
     st.markdown("---")
 
@@ -95,9 +142,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Define the financial analysis agent
+# Define the financial analysis agent using the validated API key
 finance_agent = Agent(
-    model=Gemini(id="gemini-2.0-flash-exp"),
+    model=Gemini(id="gemini-2.0-flash-exp", api_key=st.session_state.valid_api_key),
     tools=[
         YFinanceTools(
             stock_price=True,
@@ -163,5 +210,12 @@ if st.button("Analyze"):
                 st.error("No response received from the agent.")
         except Exception as e:
             st.error(f"An error occurred during analysis: {str(e)}")
+            # If the error might be related to an invalid API key, offer to reset
+            if "authentication" in str(e).lower() or "api key" in str(e).lower() or "unauthorized" in str(e).lower():
+                st.error("This may be an API key issue. Please try resetting your API key.")
+                if st.button("Reset API Key"):
+                    st.session_state.api_key_set = False
+                    st.session_state.valid_api_key = None
+                    st.rerun()
     else:
         st.error("Please enter a stock ticker symbol.")
